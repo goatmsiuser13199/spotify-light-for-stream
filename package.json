@@ -1,0 +1,23 @@
+{
+  "name": "spotify-light-for-stream",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc && vite build",
+    "preview": "vite preview",
+    "tauri": "tauri",
+    "desktop": "tauri dev",
+    "desktop:build": "tauri build && node scripts/copy-installer.mjs"
+  },
+
+  "devDependencies": {
+    "@tauri-apps/cli": "^2.12.4",
+    "typescript": "~5.9.3",
+    "vite": "^7.1.7"
+  },
+  "dependencies": {
+    "@tauri-apps/api": "^2.12.4"
+  }
+}

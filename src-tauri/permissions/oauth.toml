@@ -1,0 +1,16 @@
+[[permission]]
+identifier = "allow-spotify-oauth"
+description = "OAuth Spotify loopback, open browser, and file logs"
+commands.allow = [
+  "start_oauth_listener",
+  "open_url",
+  "append_log",
+  "open_log_folder",
+  "open_windows_sound_settings",
+  "list_windows_audio_outputs",
+  "set_windows_audio_output",
+  "get_pref",
+  "set_pref",
+  "set_ui_hidden",
+  "set_cpu_logging",
+]

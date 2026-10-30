@@ -1,0 +1,21 @@
+# Secrets
+.env
+.env.*
+
+# Dépendances & builds
+node_modules/
+dist/
+dist-install/
+src-tauri/target/
+
+# IDE / OS
+.cursor/
+.DS_Store
+Thumbs.db
+*.log
+
+# Binaires (sauf l’installateur à la racine)
+*.exe
+*.msi
+!Spotify-Light-Setup.exe
+!src-tauri/icons/**/*.ico
