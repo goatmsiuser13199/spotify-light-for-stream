@@ -1,6 +1,6 @@
 [[permission]]
 identifier = "allow-spotify-oauth"
-description = "OAuth Spotify loopback, open browser, and file logs"
+description = "OAuth Spotify, audio Windows, prefs, AirPlay HomePod"
 commands.allow = [
   "start_oauth_listener",
   "open_url",
@@ -13,4 +13,12 @@ commands.allow = [
   "set_pref",
   "set_ui_hidden",
   "set_cpu_logging",
+  "discover_devices",
+  "start_discovery_stream",
+  "stop_discovery_stream",
+  "start_streaming",
+  "stop_streaming",
+  "set_stream_volume",
+  "set_play_locally",
+  "is_streaming",
 ]

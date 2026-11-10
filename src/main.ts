@@ -1,5 +1,17 @@
 import './style.css'
 import {
+  getStreaming,
+  listenDevices,
+  setPlayLocally,
+  setStreamVolume,
+  startDiscovery,
+  startStream,
+  stopDiscovery,
+  stopStream,
+  type AirplayDevice,
+  type StreamingInfo,
+} from './airplay'
+import {
   ensureToken,
   forceRelogin,
   getClientId,
@@ -65,6 +77,13 @@ let tickDuration = 0
 let lastUiPaint = 0
 let lastPaintedUri: string | null = null
 let lastPaintedPaused: boolean | null = null
+const airplayDevices: Record<string, AirplayDevice> = {}
+let airplayStream: StreamingInfo | null = null
+let stopAirplayListen: (() => void) | null = null
+
+function refreshAirplayUi(): void {
+  ui?.setAirplayDevices(Object.values(airplayDevices), airplayStream)
+}
 
 function startProgressTick(track: TrackInfo): void {
   window.clearInterval(tickTimer)
@@ -261,6 +280,81 @@ async function boot(): Promise<void> {
     onRefreshLikes: () => {
       void loadLikes()
     },
+    onOpenAirplay: () => {
+      void (async () => {
+        ui?.setAirplayBusy(true)
+        refreshAirplayUi()
+        if (!stopAirplayListen) {
+          stopAirplayListen = await listenDevices(
+            (d) => {
+              airplayDevices[d.id] = d
+              refreshAirplayUi()
+            },
+            (msg) => {
+              airplayStream = null
+              ui?.setStatus(msg, true)
+              refreshAirplayUi()
+            },
+          )
+        }
+        airplayStream = await getStreaming()
+        await startDiscovery()
+        refreshAirplayUi()
+      })()
+        .catch((e: Error) => {
+          log.error('airplay discover', e)
+          ui?.setStatus(e.message, true)
+        })
+        .finally(() => {
+          ui?.setAirplayBusy(false)
+          refreshAirplayUi()
+        })
+    },
+    onAirplayConnect: (deviceId) => {
+      const device = airplayDevices[deviceId]
+      if (!device || !ui) return
+      void (async () => {
+        ui?.setAirplayBusy(true)
+        ui?.setStatus(`Connexion AirPlay → ${device.name}…`)
+        airplayStream = await startStream({
+          device,
+          volume: ui.getAirplayVolume(),
+          playLocally: ui.getAirplayPlayLocally(),
+          captureDeviceId: getPreferredSink(),
+        })
+        ui?.setStatus(`AirPlay : ${airplayStream.name}`)
+        refreshAirplayUi()
+      })()
+        .catch((e: Error) => {
+          log.error('airplay start', e)
+          ui?.setStatus(e.message, true)
+        })
+        .finally(() => {
+          ui?.setAirplayBusy(false)
+          refreshAirplayUi()
+        })
+    },
+    onAirplayStop: () => {
+      void stopStream()
+        .then(() => {
+          airplayStream = null
+          ui?.setStatus('AirPlay arrêté')
+          refreshAirplayUi()
+        })
+        .catch((e: Error) => ui?.setStatus(e.message, true))
+    },
+    onAirplayVolume: (v) => {
+      void setStreamVolume(v).catch((e: Error) => ui?.setStatus(e.message, true))
+    },
+    onAirplayPlayLocally: (on) => {
+      void setPlayLocally(on).catch((e: Error) => ui?.setStatus(e.message, true))
+    },
+  })
+
+  window.addEventListener('beforeunload', () => {
+    stopAirplayListen?.()
+    void stopDiscovery()
+    void stopStream().catch(() => undefined)
   })
 
   hookAudioContexts()

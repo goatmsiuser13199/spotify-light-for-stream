@@ -6,6 +6,7 @@
 node_modules/
 dist/
 dist-install/
+target/
 src-tauri/target/
 
 # IDE / OS

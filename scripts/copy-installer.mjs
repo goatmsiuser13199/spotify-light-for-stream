@@ -6,6 +6,9 @@ const dest = join(root, 'Spotify-Light-Setup.exe')
 const candidates = []
 
 const dirs = [
+  process.env.CARGO_TARGET_DIR
+    ? join(process.env.CARGO_TARGET_DIR, 'release', 'bundle', 'nsis')
+    : '',
   join(root, 'src-tauri', 'target', 'release', 'bundle', 'nsis'),
   join(process.env.TEMP || process.env.TMP || '', 'sl-cargo-target', 'release', 'bundle', 'nsis'),
 ].filter(Boolean)

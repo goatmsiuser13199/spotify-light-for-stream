@@ -9,6 +9,7 @@ use once_cell::sync::Lazy;
 use sysinfo::{Pid, ProcessesToUpdate, System};
 use tauri::{AppHandle, Emitter, Manager};
 
+mod airplay;
 mod win_audio;
 
 const OAUTH_PORT: u16 = 5173;
@@ -246,7 +247,26 @@ fn start_oauth_listener(app: AppHandle) -> Result<(), String> {
 
 #[tauri::command]
 fn open_url(url: String) -> Result<(), String> {
-  open::that(url).map_err(|e| e.to_string())
+  // `that` attend parfois le process navigateur → clic « mort » au 1er lancement.
+  // `that_detached` + fallback `cmd start` est fiable sous Windows.
+  if open::that_detached(&url).is_ok() {
+    return Ok(());
+  }
+  #[cfg(windows)]
+  {
+    use std::os::windows::process::CommandExt;
+    const CREATE_NO_WINDOW: u32 = 0x0800_0000;
+    std::process::Command::new("cmd")
+      .args(["/C", "start", "", &url])
+      .creation_flags(CREATE_NO_WINDOW)
+      .spawn()
+      .map_err(|e| format!("Impossible d’ouvrir le lien: {e}"))?;
+    return Ok(());
+  }
+  #[cfg(not(windows))]
+  {
+    open::that(&url).map_err(|e| format!("Impossible d’ouvrir le lien: {e}"))
+  }
 }
 
 #[tauri::command]
@@ -308,6 +328,8 @@ fn set_windows_audio_output(device_id: String) -> Result<String, String> {
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
   tauri::Builder::default()
+    .manage(airplay::DiscoveryState::default())
+    .manage(airplay::StreamingState::default())
     .setup(|app| {
       {
         let mut guard = APP_HANDLE.lock().map_err(|e| e.to_string())?;
@@ -327,7 +349,15 @@ pub fn run() {
       get_pref,
       set_pref,
       set_ui_hidden,
-      set_cpu_logging
+      set_cpu_logging,
+      airplay::discover_devices,
+      airplay::start_discovery_stream,
+      airplay::stop_discovery_stream,
+      airplay::start_streaming,
+      airplay::stop_streaming,
+      airplay::set_stream_volume,
+      airplay::set_play_locally,
+      airplay::is_streaming
     ])
     .run(tauri::generate_context!())
     .expect("error while building tauri application");

@@ -1,9 +1,25 @@
+import {
+  kindLabel,
+  type AirplayDevice,
+  type StreamingInfo,
+} from './airplay'
 import { formatAdded, formatMs, type LikedTrack, type SpotifyDevice } from './api'
+import { REDIRECT_URI } from './auth'
 import type { AudioOut } from './audioOutput'
 import { getSavedVolume, type TrackInfo } from './player'
 
 function icon(
-  name: 'play' | 'pause' | 'prev' | 'next' | 'heart' | 'vol' | 'gear' | 'repeat' | 'search',
+  name:
+    | 'play'
+    | 'pause'
+    | 'prev'
+    | 'next'
+    | 'heart'
+    | 'vol'
+    | 'gear'
+    | 'repeat'
+    | 'search'
+    | 'airplay',
 ): string {
   const map: Record<string, string> = {
     play: `<svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7L8 5z"/></svg>`,
@@ -15,6 +31,7 @@ function icon(
     gear: `<svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M19.14 12.94c.04-.31.06-.63.06-.94s-.02-.63-.06-.94l2.03-1.58a.5.5 0 0 0 .12-.64l-1.92-3.32a.5.5 0 0 0-.6-.22l-2.39.96a7.1 7.1 0 0 0-1.63-.94l-.36-2.54A.5.5 0 0 0 13.9 2h-3.8a.5.5 0 0 0-.49.42l-.36 2.54c-.58.23-1.12.54-1.63.94l-2.39-.96a.5.5 0 0 0-.6.22L2.71 8.48a.5.5 0 0 0 .12.64L4.86 10.7c-.04.31-.06.63-.06.94s.02.63.06.94l-2.03 1.58a.5.5 0 0 0-.12.64l1.92 3.32c.13.23.4.32.64.22l2.39-.96c.5.4 1.05.71 1.63.94l.36 2.54c.05.24.25.42.49.42h3.8c.24 0 .44-.18.49-.42l.36-2.54c.58-.23 1.12-.54 1.63-.94l2.39.96c.24.1.51 0 .64-.22l1.92-3.32a.5.5 0 0 0-.12-.64l-2.03-1.58zM12 15.5A3.5 3.5 0 1 1 12 8a3.5 3.5 0 0 1 0 7.5z"/></svg>`,
     repeat: `<svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M7 7h10v3l4-4-4-4v3H5v6h2V7zm10 10H7v-3l-4 4 4 4v-3h12v-6h-2v4zm-4-2.5a1.5 1.5 0 1 1 0-3 1.5 1.5 0 0 1 0 3z"/></svg>`,
     search: `<svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M15.5 14h-.79l-.28-.27A6.47 6.47 0 0 0 16 9.5 6.5 6.5 0 1 0 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 5L20.49 19l-5-5zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14z"/></svg>`,
+    airplay: `<svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M6 22h12l-6-6-6 6zm14-4V4H4v14h3.4l1.5-1.5H5.5V5.5h13v11h-3.4L16.6 18H20z"/></svg>`,
   }
   return map[name]
 }
@@ -38,6 +55,17 @@ export type UiHandles = {
   setRepeatActive: (on: boolean) => void
   setMode: (mode: 'liked' | 'search', countLabel: string) => void
   getSearchQuery: () => string
+  setAirplayDevices: (devices: AirplayDevice[], streaming: StreamingInfo | null) => void
+  setAirplayBusy: (busy: boolean) => void
+  getAirplayPlayLocally: () => boolean
+  getAirplayVolume: () => number
+}
+
+const SPOTIFY_DASHBOARD = 'https://developer.spotify.com/dashboard'
+
+async function openExternalUrl(url: string): Promise<void> {
+  const { invoke } = await import('@tauri-apps/api/core')
+  await invoke('open_url', { url })
 }
 
 export function renderLogin(
@@ -52,11 +80,34 @@ export function renderLogin(
   root.innerHTML = `
     <section class="setup">
       <h1>Spotify Light</h1>
-      <p>Premium requis. Guide : <code>README.md</code></p>
+      <p class="setup-lead">Première connexion — <strong>Premium</strong> requis. Crée ton app Spotify (1 fois), puis colle le Client ID.</p>
       <ol class="setup-steps">
-        <li><a href="https://developer.spotify.com/dashboard" target="_blank" rel="noreferrer">Dashboard</a> → Create app</li>
-        <li>Redirect URI : <code>http://127.0.0.1:5173/callback</code></li>
-        <li>Settings → copie le <strong>Client ID</strong> ici</li>
+        <li>
+          Ouvre le
+          <button type="button" class="link-btn" id="open-dashboard">Dashboard Spotify</button>
+          → <strong>Create app</strong>
+        </li>
+        <li>Remplis le formulaire :</li>
+      </ol>
+      <table class="setup-table">
+        <tbody>
+          <tr><th>App name</th><td><code>Spotify Light</code></td></tr>
+          <tr><th>App description</th><td><code>Lecteur perso</code></td></tr>
+          <tr><th>Website</th><td>vide</td></tr>
+          <tr>
+            <th>Redirect URIs</th>
+            <td>
+              <code id="redirect-uri">${REDIRECT_URI}</code>
+              <button type="button" class="link-btn" id="copy-redirect">Copier</button>
+            </td>
+          </tr>
+          <tr><th>APIs / SDKs</th><td><strong>Web API</strong> + <strong>Web Playback SDK</strong></td></tr>
+          <tr><th>I understand…</th><td>coche</td></tr>
+        </tbody>
+      </table>
+      <ol class="setup-steps setup-steps-cont" start="3">
+        <li>Settings → copie le <strong>Client ID</strong></li>
+        <li>Colle-le ici → <strong>Enregistrer</strong> → <strong>Connexion Spotify</strong></li>
       </ol>
       <label class="setup-field">
         <span>Client ID</span>
@@ -76,6 +127,34 @@ export function renderLogin(
   const idInput = root.querySelector('#client-id') as HTMLInputElement
   const loginBtn = root.querySelector('#login-btn') as HTMLButtonElement
   const status = root.querySelector('#status') as HTMLElement
+
+  root.querySelector('#open-dashboard')?.addEventListener('click', () => {
+    status.textContent = 'Ouverture du Dashboard…'
+    status.classList.remove('error')
+    void openExternalUrl(SPOTIFY_DASHBOARD)
+      .then(() => {
+        status.textContent = 'Dashboard ouvert dans le navigateur'
+        status.classList.remove('error')
+      })
+      .catch((e: unknown) => {
+        const msg = e instanceof Error ? e.message : String(e)
+        status.textContent = msg || 'Impossible d’ouvrir le Dashboard'
+        status.classList.add('error')
+      })
+  })
+
+  root.querySelector('#copy-redirect')?.addEventListener('click', () => {
+    void navigator.clipboard.writeText(REDIRECT_URI).then(
+      () => {
+        status.textContent = 'Redirect URI copiée'
+        status.classList.remove('error')
+      },
+      () => {
+        status.textContent = 'Copie impossible — sélectionne l’URI à la main'
+        status.classList.add('error')
+      },
+    )
+  })
 
   root.querySelector('#save-id')?.addEventListener('click', () => {
     void Promise.resolve(handlers.onSaveClientId(idInput.value))
@@ -113,6 +192,11 @@ export function renderApp(
     onRelogin: () => void
     onOpenSoundSettings: () => void
     onRefreshLikes: () => void
+    onOpenAirplay: () => void
+    onAirplayConnect: (deviceId: string) => void
+    onAirplayStop: () => void
+    onAirplayVolume: (v: number) => void
+    onAirplayPlayLocally: (on: boolean) => void
   },
 ): UiHandles {
   root.innerHTML = `
@@ -193,6 +277,25 @@ export function renderApp(
           <input id="volume" type="range" min="0" max="100" value="${Math.round(getSavedVolume() * 100)}" />
         </div>
         <div class="settings-wrap">
+          <button class="icon-btn" id="airplay-btn" aria-label="AirPlay / HomePod" title="Diffuser sur HomePod">${icon('airplay')}</button>
+          <div class="menu airplay-menu" id="airplay-menu">
+            <div class="menu-label">AirPlay → HomePod</div>
+            <p class="airplay-hint">Même Wi‑Fi. Lance une piste d’abord. Capture la sortie PC choisie (menu engrenage). Firewall : autoriser si demandé.</p>
+            <div id="airplay-list" class="airplay-list"><p class="airplay-empty">Recherche…</p></div>
+            <div class="airplay-controls" id="airplay-controls" hidden>
+              <label class="airplay-row">
+                <span>Volume HomePod</span>
+                <input id="airplay-vol" type="range" min="0" max="100" value="55" />
+              </label>
+              <label class="airplay-check">
+                <input id="airplay-local" type="checkbox" checked />
+                Garder aussi le son sur le PC
+              </label>
+              <button type="button" class="btn" id="airplay-stop">Arrêter AirPlay</button>
+            </div>
+          </div>
+        </div>
+        <div class="settings-wrap">
           <button class="icon-btn" id="settings" aria-label="Paramètres">${icon('gear')}</button>
           <div class="menu" id="menu">
             <div class="menu-label">Sortie PC (casque / HDMI / écran)</div>
@@ -227,6 +330,12 @@ export function renderApp(
   const toggleBtn = root.querySelector('#toggle') as HTMLButtonElement
   const volumeEl = root.querySelector('#volume') as HTMLInputElement
   const menu = root.querySelector('#menu') as HTMLElement
+  const airplayMenu = root.querySelector('#airplay-menu') as HTMLElement
+  const airplayBtn = root.querySelector('#airplay-btn') as HTMLButtonElement
+  const airplayList = root.querySelector('#airplay-list') as HTMLElement
+  const airplayControls = root.querySelector('#airplay-controls') as HTMLElement
+  const airplayVol = root.querySelector('#airplay-vol') as HTMLInputElement
+  const airplayLocal = root.querySelector('#airplay-local') as HTMLInputElement
   const devicesEl = root.querySelector('#devices') as HTMLElement
   const audioOutsEl = root.querySelector('#audio-outs') as HTMLElement
 
@@ -240,6 +349,7 @@ export function renderApp(
   const tPos = root.querySelector('#t-pos') as HTMLElement
   const tDur = root.querySelector('#t-dur') as HTMLElement
   let seeking = false
+  let airplayBusy = false
 
   seekEl.addEventListener('pointerdown', () => {
     seeking = true
@@ -260,13 +370,34 @@ export function renderApp(
 
   root.querySelector('#settings')?.addEventListener('click', (e) => {
     e.stopPropagation()
+    airplayMenu.classList.remove('open')
     const willOpen = !menu.classList.contains('open')
     menu.classList.toggle('open', willOpen)
     if (willOpen) handlers.onOpenSettings()
   })
 
-  document.addEventListener('click', () => menu.classList.remove('open'))
+  airplayBtn.addEventListener('click', (e) => {
+    e.stopPropagation()
+    menu.classList.remove('open')
+    const willOpen = !airplayMenu.classList.contains('open')
+    airplayMenu.classList.toggle('open', willOpen)
+    if (willOpen) handlers.onOpenAirplay()
+  })
+
+  root.querySelector('#airplay-stop')?.addEventListener('click', () => handlers.onAirplayStop())
+  airplayVol.addEventListener('input', () => {
+    handlers.onAirplayVolume(Number(airplayVol.value) / 100)
+  })
+  airplayLocal.addEventListener('change', () => {
+    handlers.onAirplayPlayLocally(airplayLocal.checked)
+  })
+
+  document.addEventListener('click', () => {
+    menu.classList.remove('open')
+    airplayMenu.classList.remove('open')
+  })
   menu.addEventListener('click', (e) => e.stopPropagation())
+  airplayMenu.addEventListener('click', (e) => e.stopPropagation())
 
   let searchTimer: number | undefined
   searchEl.addEventListener('input', () => {
@@ -449,5 +580,46 @@ export function renderApp(
       countEl.textContent = countLabel
     },
     getSearchQuery: () => searchEl.value,
+    setAirplayDevices(devices, streaming) {
+      airplayBtn.classList.toggle('active', Boolean(streaming))
+      airplayControls.hidden = !streaming
+      if (streaming) {
+        airplayVol.value = String(Math.round(streaming.volume * 100))
+      }
+      if (!devices.length) {
+        airplayList.innerHTML = `<p class="airplay-empty">${airplayBusy ? 'Recherche…' : 'Aucun HomePod / AirPlay trouvé'}</p>`
+        return
+      }
+      const sorted = [...devices].sort((a, b) =>
+        a.name.localeCompare(b.name, 'fr', { sensitivity: 'base' }),
+      )
+      airplayList.innerHTML = sorted
+        .map((d) => {
+          const active = streaming && primaryMatch(d, streaming)
+          const disabled = airplayBusy || !d.supports_airplay2
+          return `
+          <button type="button" class="device ${active ? 'active' : ''}" data-ap="${escapeHtml(d.id)}" ${disabled ? 'disabled' : ''}>
+            ${escapeHtml(d.name)}
+            <span class="airplay-kind">${escapeHtml(kindLabel(d.kind))}${d.supports_airplay2 ? '' : ' · non AP2'}</span>
+          </button>`
+        })
+        .join('')
+      airplayList.querySelectorAll('button[data-ap]').forEach((btn) => {
+        btn.addEventListener('click', () => {
+          const id = (btn as HTMLElement).dataset.ap
+          if (id) handlers.onAirplayConnect(id)
+        })
+      })
+    },
+    setAirplayBusy(busy) {
+      airplayBusy = busy
+      airplayBtn.disabled = busy
+    },
+    getAirplayPlayLocally: () => airplayLocal.checked,
+    getAirplayVolume: () => Number(airplayVol.value) / 100,
   }
+}
+
+function primaryMatch(device: AirplayDevice, streaming: StreamingInfo): boolean {
+  return device.addresses.map(String).includes(streaming.ip) || device.name === streaming.name
 }
