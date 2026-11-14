@@ -372,7 +372,6 @@ version = "0.1.0"
 dependencies = [
  "cpal",
  "crossbeam-channel",
- "ringbuf",
  "thiserror 1.0.69",
  "tracing",
  "wasapi",
@@ -3664,17 +3663,6 @@ dependencies = [
  "wasm-bindgen-futures",
  "wasm-streams",
  "web-sys",
-]
-
-[[package]]
-name = "ringbuf"
-version = "0.4.8"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "fe47b720588c8702e34b5979cb3271a8b1842c7cb6f57408efa70c779363488c"
-dependencies = [
- "crossbeam-utils",
- "portable-atomic",
- "portable-atomic-util",
 ]
 
 [[package]]
