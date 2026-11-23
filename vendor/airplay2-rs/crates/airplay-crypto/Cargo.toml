@@ -25,9 +25,9 @@ sha2.workspace = true
 hkdf.workspace = true
 num-bigint.workspace = true
 
-# RSA encryption (for RAOP key exchange)
-rsa = "0.9"
-sha1 = "0.10"
+# RSA encryption (for RAOP key exchange) — 0.10+ fixes RUSTSEC-2023-0071 (Marvin)
+rsa = "0.10"
+sha1 = "0.11"
 
 # Digest authentication (RFC 2617)
 md-5 = "0.10"

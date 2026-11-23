@@ -6,7 +6,8 @@
 //! by shairport-sync.
 
 use airplay_core::error::CryptoError;
-use rsa::{Oaep, RsaPublicKey};
+use rsa::{BoxedUint, PublicKey};
+use sha1::Sha1;
 
 /// Apple's well-known 2048-bit RSA public key (DER-encoded PKCS#1 modulus + exponent).
 ///
@@ -33,27 +34,25 @@ const APPLE_RSA_MODULUS: &[u8] = &[
     0xbd,
 ];
 
-const APPLE_RSA_EXPONENT: u32 = 65537;
+const APPLE_RSA_EXPONENT: u64 = 65537;
+const APPLE_RSA_BITS: u32 = 2048;
 
 /// Encrypt a 16-byte AES key using RSA-OAEP (SHA-1) with Apple's public key.
 ///
 /// Returns a 256-byte (2048-bit) RSA ciphertext suitable for the SDP
 /// `a=rsaaeskey:` attribute (after Base64 encoding).
 pub fn encrypt_aes_key(aes_key: &[u8; 16]) -> Result<Vec<u8>, CryptoError> {
-    let n = rsa::BigUint::from_bytes_be(APPLE_RSA_MODULUS);
-    let e = rsa::BigUint::from(APPLE_RSA_EXPONENT);
+    let n = BoxedUint::from_be_slice(APPLE_RSA_MODULUS, APPLE_RSA_BITS).map_err(|e| {
+        CryptoError::Encryption(format!("Invalid RSA modulus encoding: {}", e))
+    })?;
+    let e = BoxedUint::from(APPLE_RSA_EXPONENT);
 
-    let public_key = RsaPublicKey::new(n, e)
+    let public_key = PublicKey::new(n, e)
         .map_err(|e| CryptoError::Encryption(format!("Invalid RSA key: {}", e)))?;
 
-    let padding = Oaep::new::<sha1::Sha1>();
-    let mut rng = rand::thread_rng();
-
-    let ciphertext = public_key
-        .encrypt(&mut rng, padding, aes_key)
-        .map_err(|e| CryptoError::Encryption(format!("RSA encryption failed: {}", e)))?;
-
-    Ok(ciphertext)
+    public_key
+        .oaep_encrypt::<Sha1>(aes_key)
+        .map_err(|e| CryptoError::Encryption(format!("RSA encryption failed: {}", e)))
 }
 
 #[cfg(test)]
